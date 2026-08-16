@@ -1,0 +1,218 @@
+---
+description: Repository architecture and separation-of-concerns rules for TaPoS QA automation.
+alwaysApply: true
+---
+
+# QA Architecture
+
+This rule defines how the `tapos-qa-automation` repository is organized and where different kinds of QA automation work belong.
+
+**Safety precedence:** `.cursor/rules/qa-safety.mdc` takes precedence over architecture convenience. All architecture decisions must respect TEST-only policies, no production usage, and no committed secrets.
+
+## Core Principle
+
+Keep these responsibilities clearly separated. Do not mix them without a clear reason.
+
+| Directory | Responsibility |
+|-----------|----------------|
+| `products/` | Functionality and automation belonging primarily to one product |
+| `workflows/` | Business journeys involving multiple products/systems |
+| `shared/` | Reusable automation infrastructure |
+| `config/` | Framework and runtime configuration |
+| `tests/` | Framework-level or top-level orchestration only when appropriate |
+
+## `products/`
+
+Product-specific QA automation and supporting code.
+
+Intended future shape (do not create unless adding a product):
+
+```text
+products/
+└── some-product/
+    ├── pages/
+    ├── components/
+    ├── fixtures/
+    ├── helpers/
+    ├── test-data/
+    └── tests/
+```
+
+When adding automation for one product:
+
+- Keep product-specific selectors, page objects, components, fixtures, helpers, and tests inside that product.
+- Do not place product-specific logic in `shared/` just because it might be reused twice.
+- Move something into `shared/` only when it is genuinely reusable across multiple products or workflows.
+
+## `workflows/`
+
+End-to-end or integration journeys that cross product/system boundaries.
+
+Intended examples (do not create unless adding a workflow): `ticket-purchase/`, `membership-redemption/`, `refund/`, `reporting/`.
+
+A workflow should reuse product-level abstractions:
+
+```text
+workflow
+   ↓
+uses Product A page/helper
+   ↓
+uses Product B page/helper
+   ↓
+performs cross-product assertions
+```
+
+Workflow rules:
+
+- Do not copy selectors from a product into a workflow.
+- Do not duplicate login/navigation logic already owned by a product.
+- Keep workflows focused on the business journey; put low-level product interaction in the owning product module.
+- Use workflows only when the scenario genuinely crosses products/systems.
+- Do not turn every test into a cross-product end-to-end test.
+
+## `shared/`
+
+Infrastructure reusable across multiple products or workflows.
+
+Existing areas that must remain:
+
+- `shared/safety/` — runtime automation safety mechanisms (e.g. environment guard, blocked-host validation, destructive-action guards). Must respect `qa-safety.mdc`.
+- `shared/test-data/` — reusable runtime test-data discovery, creation, validation, and cleanup.
+
+Potential future areas (create only when needed): `api/`, `assertions/`, `auth/`, `database/`, `fixtures/`, `logging/`, `utilities/`.
+
+Prefer this flow over hard-coded temporary IDs:
+
+```text
+Define data requirements → Find/create suitable TEST data → Validate prerequisites → Run scenario
+```
+
+Product-specific data logic stays in the owning product unless genuinely reusable across products.
+
+## `config/`
+
+Framework/runtime configuration (TEST URLs, browser settings, blocked production hosts, product settings, runtime feature flags).
+
+- Do not store secrets in `config/`.
+- Do not hard-code temporary test data into configuration.
+
+## `tests/`
+
+Do **not** treat `tests/` as the default location for every automated test.
+
+Use only when appropriate for:
+
+- framework validation
+- repository-wide smoke orchestration
+- top-level suites
+- technical framework tests
+- tests that do not naturally belong to a specific product or workflow
+
+Normal product tests live under their product module. Cross-product tests live under their workflow module.
+
+## Test Case Manager
+
+The Test Case Manager (`.cursor/agents/test-case-manager.md`) owns test case management and coverage organization.
+
+When creating or modifying automation:
+
+- Respect test cases and statuses maintained by the Test Case Manager.
+- Search existing coverage before adding new tests.
+- Avoid duplicate automation for an already-covered scenario.
+- Flag unclear expected behavior instead of inventing assertions.
+- Follow approved/understood test coverage.
+
+The Test Case Manager does not dictate low-level code architecture when this rule already defines the correct location.
+
+## Separation of Concerns
+
+Keep these separate where possible:
+
+```text
+Test intent        → what behavior is being validated
+Page/component     → how the UI is interacted with
+Test data          → what data conditions are needed
+Assertions         → what expected result is validated
+Workflow           → how multiple products interact
+```
+
+Avoid tests that inline all concerns when reusable abstractions are appropriate.
+
+## Page Objects / UI Abstractions
+
+When UI automation is introduced:
+
+- Prefer semantic, maintainable locators.
+- Split by meaningful page/component responsibility; avoid giant page objects.
+- Keep assertions primarily in tests unless the assertion is a genuinely reusable domain assertion.
+- Do not hide important business behavior inside generic helpers.
+
+Prefer focused actions (`login()`, `selectPerformance()`, `addTicket()`) over catch-all methods (`doEverything()`).
+
+## Helpers
+
+Before adding a helper, ask: Is it reused? Who owns it? Is it product-specific or genuinely shared? Would it hide test intent?
+
+Avoid generic dumping grounds. Do not create unfocused files such as `utils.ts`, `helpers.ts`, or `common.ts` containing unrelated behavior. Prefer focused modules with clear responsibilities.
+
+## Test Independence
+
+Tests should be independent where practical. Avoid:
+
+- test A creating state required by test B
+- relying on execution order
+- reusing temporary IDs from previous runs
+- storing runtime-generated IDs in source files
+- depending on another test having already passed
+
+Use fixtures/helpers or create/discover required data for each test.
+
+## Test Data
+
+Test data is dynamic. Do not hard-code temporary records when data can be located or created at runtime.
+
+Bad:
+
+```typescript
+const performanceId = 12345;
+const transactionId = 98765;
+```
+
+Prefer describing required conditions, e.g. "available TEST performance with at least 2 seats" or "TEST member eligible for the scenario".
+
+If suitable data cannot be found, fail with a clear prerequisite/test-data message. Do not silently substitute unrelated data.
+
+## Cross-Product Dependencies
+
+When a scenario spans multiple systems:
+
+1. Identify the owning product for each action.
+2. Reuse that product's abstractions.
+3. Keep workflow orchestration under `workflows/`.
+4. Keep cross-system assertions explicit.
+5. Avoid copying product implementation into the workflow.
+
+```text
+Product A action → Product A result → Product B downstream result → Cross-product consistency assertion
+```
+
+## API / Database Validation
+
+When API/database support is introduced later:
+
+- Use UI automation for behavior the user actually performs.
+- Prefer API/database checks for backend state when more reliable than navigating another UI solely for verification.
+- Do not scatter database queries throughout test files; centralize reusable data-access logic.
+- Keep tests readable so business validation remains obvious.
+
+Do not add API/database integrations unless explicitly requested for that task.
+
+## Naming and Maintainability
+
+Prefer descriptive names based on business purpose. Keep modules small enough that maintainers can understand their purpose.
+
+Before adding new architecture:
+
+1. Check whether the existing structure already supports it.
+2. Avoid unnecessary folders and abstraction layers.
+3. Do not create architecture for hypothetical future needs unless there is a clear current benefit.

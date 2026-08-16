@@ -1,0 +1,30 @@
+---
+description: Test-environment safety requirements for TaPoS QA automation
+alwaysApply: true
+---
+
+# QA Safety — TEST Environment Only
+
+This automation repository is for the approved **TEST** environment only. Production must **never** be used for automation or testing.
+
+## Required Behavior
+
+- Never run automated tests against production.
+- Never use production URLs, databases, credentials, accounts, or payment details.
+- Never use real customer data for test automation.
+- If a hostname, URL, database, account, or credential appears to be production, **stop and report it** instead of continuing.
+- Never disable, remove, bypass, or weaken production safety checks.
+- Never change the configured environment to production simply to make a failing test pass.
+- Destructive actions such as refunds, cancellations, deletes, account changes, and payment testing must only use approved test data.
+- Secrets must never be committed to Git.
+- `.env` files and credentials must remain outside source control.
+
+## Repository Scope
+
+- `products/` — automation and reusable components for a specific TaPoS/JACRO product.
+- `workflows/` — business journeys that span more than one product.
+- `shared/` — reusable helpers (authentication, API clients, database helpers, assertions, utilities, test-data helpers).
+- `config/` — test-environment configuration only.
+- `tests/` — top-level smoke/regression orchestration when appropriate.
+
+Gemini is **not** part of this project and must not be added.
