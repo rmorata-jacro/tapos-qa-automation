@@ -32,4 +32,4 @@ This repository is organized around product-specific automation, cross-product w
 
 **Playwright + TypeScript** is planned as the primary web automation framework. It is not installed yet.
 
-Desktop and JavPOS automation will be evaluated separately rather than forcing them into Playwright.
+TaPoS Admin and JavPOS automation will be evaluated separately rather than forcing them into Playwright.
