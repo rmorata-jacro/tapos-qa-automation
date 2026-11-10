@@ -1,4 +1,5 @@
 import type { Suite } from '../products/cloud-signup/int-3437-test-catalog';
+import { assertStagingUrl } from '../shared/safety/environment-guard';
 
 export type SuiteSelection = 'framework' | Suite;
 
@@ -24,4 +25,10 @@ export function selectedSuite(env: Record<string, string | undefined> = process.
     throw new Error(`QA_SUITE "${suite}" is not permitted in nightly runs. Nightly allows: ${NIGHTLY_SUITES.join(', ')}.`);
   }
   return suite;
+}
+
+/** Fails closed: every suite except the framework self-tests needs a valid approved staging base URL. */
+export function resolveBaseUrl(suite: SuiteSelection, env: Record<string, string | undefined> = process.env): string | undefined {
+  if (suite === 'framework') return undefined;
+  return assertStagingUrl(env.CLOUD_SIGNUP_BASE_URL, 'CLOUD_SIGNUP_BASE_URL').origin;
 }

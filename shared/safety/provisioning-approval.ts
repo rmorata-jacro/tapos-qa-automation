@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { evaluateDatabaseTargets } from './database-guard';
 import { evaluateLevel } from './execution-gate';
 
 type Env = Record<string, string | undefined>;
@@ -47,6 +48,7 @@ export function evaluateProvisioningApproval(env: Env = process.env): { approval
   for (const { flag, meaning } of PROVISIONING_PRECONDITIONS) {
     if (env[flag] !== 'yes') reasons.push(`${flag}=yes is required (${meaning}).`);
   }
+  reasons.push(...evaluateDatabaseTargets(env).reasons);
 
   if (reasons.length > 0) return { reasons };
   return {

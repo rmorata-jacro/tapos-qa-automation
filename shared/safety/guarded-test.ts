@@ -1,8 +1,12 @@
 import { test as base, type Page, type TestInfo } from '@playwright/test';
-import { assertTestUrl, isAllowedTestHost } from './environment-guard';
+import { APPROVED_STAGING } from '../../config/environments';
+import { guardContext, hardenLaunchOptions } from './browser-hardening';
+import { verifyHostResolution } from './dns-guard';
+import { assertStagingUrl, proxyEnvironmentReasons, UnsafeEnvironmentError } from './environment-guard';
 import { ExecutionNotPermittedError, evaluateLevel } from './execution-gate';
+import { guardApiContext } from './guarded-api';
 import { evaluateIsolatedEnvironment } from './isolated-environment';
-import { applyNetworkPolicy, type NetworkPolicyHandle } from './network-policy';
+import type { NetworkPolicyHandle } from './network-policy';
 import { requireProvisioningApproval } from './provisioning-approval';
 import { redactText, redactUrl } from './redaction';
 import { isSafetyLevel, SAFETY_ANNOTATION, SAFETY_POLICIES, type SafetyLevel } from './safety-levels';
@@ -21,6 +25,10 @@ export interface GuardedFixtures {
   safetyLevel: SafetyLevel;
   networkPolicy: NetworkPolicyHandle;
   readonlyApi: ReadonlyApi;
+}
+
+export interface GuardedWorkerFixtures {
+  stagingResolutionVerified: void;
 }
 
 export function safetyLevelOf(testInfo: TestInfo): SafetyLevel {
@@ -50,13 +58,35 @@ async function captureRedactedEvidence(page: Page, testInfo: TestInfo, extraMask
   await testInfo.attach('page-url-redacted', { body: redactUrl(page.url()), contentType: 'text/plain' });
 }
 
-export const test = base.extend<GuardedFixtures>({
+/**
+ * Every product and workflow spec imports `test` from here, so these
+ * restrictions apply however the spec is executed (npm script, direct file
+ * path, or another config):
+ * - the browser can only resolve approved staging hosts and ignores proxies;
+ * - the staging host must resolve to public, non-production addresses;
+ * - baseURL must be the approved staging host over https;
+ * - browser, redirect, WebSocket, and API traffic is policed per safety level.
+ */
+export const test = base.extend<GuardedFixtures, GuardedWorkerFixtures>({
+  launchOptions: [async ({ launchOptions }, use) => use(hardenLaunchOptions(launchOptions)), { scope: 'worker' }],
+
+  stagingResolutionVerified: [
+    async ({}, use) => {
+      const reasons = [...proxyEnvironmentReasons(), ...(await verifyHostResolution(APPROVED_STAGING.hosts))];
+      if (reasons.length) throw new UnsafeEnvironmentError(`Staging network check failed: ${reasons.join(' ')}`);
+      await use();
+    },
+    { scope: 'worker', auto: true },
+  ],
+
   allowedMutations: [[], { option: true }],
   sensitiveSelectors: [[], { option: true }],
 
   safetyLevel: [
-    async ({ baseURL }, use, testInfo) => {
+    async ({ baseURL, proxy }, use, testInfo) => {
       const level = safetyLevelOf(testInfo);
+      const target = assertStagingUrl(baseURL, 'CLOUD_SIGNUP_BASE_URL');
+      if (proxy) throw new UnsafeEnvironmentError('A Playwright proxy is configured; it can hide the real destination.');
       const decision = evaluateLevel(level);
       if (!decision.permitted) {
         if (SAFETY_POLICIES[level].onDenied === 'skip') {
@@ -64,32 +94,33 @@ export const test = base.extend<GuardedFixtures>({
         }
         throw new ExecutionNotPermittedError(decision);
       }
-      if (level !== 'framework') {
-        const target = assertTestUrl(baseURL, 'CLOUD_SIGNUP_BASE_URL');
-        if (level === 'provisioning') requireProvisioningApproval();
-        if (level === 'destructive') {
-          const reasons = evaluateIsolatedEnvironment(target.hostname);
-          if (reasons.length) throw new Error(`SUITE C REFUSED: ${reasons.join(' ')}`);
-        }
+      if (level === 'provisioning') requireProvisioningApproval();
+      if (level === 'destructive') {
+        const reasons = evaluateIsolatedEnvironment(target.hostname);
+        if (reasons.length) throw new Error(`SUITE C REFUSED: ${reasons.join(' ')}`);
       }
-      testInfo.annotations.push({ type: 'environment', description: baseURL ? new URL(baseURL).host : 'none' });
+      testInfo.annotations.push({ type: 'environment', description: target.host });
       await use(level);
     },
     { auto: true },
   ],
 
-  networkPolicy: async ({ context, safetyLevel, allowedMutations }, use) => {
-    await use(await applyNetworkPolicy(context, { level: safetyLevel, allowedMutations }));
+  networkPolicy: async ({ context, safetyLevel, allowedMutations, baseURL }, use) => {
+    await use(await guardContext(context, { level: safetyLevel, allowedMutations, baseURL }));
+  },
+
+  request: async ({ request, safetyLevel, allowedMutations, baseURL }, use) => {
+    await use(guardApiContext(request, { level: safetyLevel, allowedMutations, baseURL }));
   },
 
   page: async ({ page, networkPolicy, sensitiveSelectors }, use, testInfo) => {
     await use(page);
     if (testInfo.status !== testInfo.expectedStatus) await captureRedactedEvidence(page, testInfo, sensitiveSelectors);
     if (networkPolicy.allowedWrites.length) {
-      await testInfo.attach('write-requests-redacted', {
-        body: networkPolicy.allowedWrites.join('\n'),
-        contentType: 'text/plain',
-      });
+      await testInfo.attach('write-requests-redacted', { body: networkPolicy.allowedWrites.join('\n'), contentType: 'text/plain' });
+    }
+    if (networkPolicy.blockedRequests.length) {
+      await testInfo.attach('blocked-background-requests', { body: networkPolicy.blockedRequests.join('\n'), contentType: 'text/plain' });
     }
     if (networkPolicy.violations.length) {
       throw new Error(`NETWORK SAFETY VIOLATION:\n- ${networkPolicy.violations.join('\n- ')}`);
@@ -97,23 +128,16 @@ export const test = base.extend<GuardedFixtures>({
   },
 
   readonlyApi: async ({ request, baseURL }, use) => {
+    const api = guardApiContext(request, { level: 'readonly', allowedMutations: [], baseURL });
     await use({
       async getJson<T>(pathOrUrl: string) {
-        const url = new URL(pathOrUrl, baseURL);
-        if (!isAllowedTestHost(url.hostname)) {
-          throw new Error(`Read-only API call refused: ${redactUrl(url.toString())} is not an approved TEST host.`);
-        }
-        const response = await request.get(url.toString(), { headers: { accept: 'application/json' } });
+        const response = await api.get(pathOrUrl, { headers: { accept: 'application/json' } });
         const text = await response.text();
-        let body: T;
         try {
-          body = JSON.parse(text) as T;
+          return { status: response.status(), body: JSON.parse(text) as T };
         } catch {
-          throw new Error(
-            `Expected JSON from ${redactUrl(url.toString())} (HTTP ${response.status()}), got: ${redactText(text.slice(0, 200))}`,
-          );
+          throw new Error(`Expected JSON from ${redactUrl(response.url())} (HTTP ${response.status()}), got: ${redactText(text.slice(0, 200))}`);
         }
-        return { status: response.status(), body };
       },
     });
   },

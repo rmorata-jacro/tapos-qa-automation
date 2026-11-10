@@ -1,13 +1,12 @@
 import { defineConfig, devices, type Project } from '@playwright/test';
 import { loadLocalEnv } from './config/load-env';
-import { selectedSuite, SUITE_FILES, type SuiteSelection } from './config/suites';
-import { assertTestUrl } from './shared/safety/environment-guard';
+import { resolveBaseUrl, selectedSuite, SUITE_FILES, type SuiteSelection } from './config/suites';
+import { hardenLaunchOptions } from './shared/safety/browser-hardening';
 
 loadLocalEnv();
 
 const suite = selectedSuite();
-const baseURL = process.env.CLOUD_SIGNUP_BASE_URL;
-if (suite !== 'framework' && baseURL) assertTestUrl(baseURL, 'CLOUD_SIGNUP_BASE_URL');
+const baseURL = resolveBaseUrl(suite);
 
 /** Traces capture typed values and full URLs, so they are only kept for suites that never handle secrets. */
 const TRACE: Record<SuiteSelection, 'off' | 'retain-on-failure'> = {
@@ -23,7 +22,10 @@ const highRisk = suite === 'B' || suite === 'C';
 const project: Project = {
   name: suite,
   ...SUITE_FILES[suite],
-  use: suite === 'framework' ? {} : { ...devices['Desktop Chrome'], baseURL, trace: TRACE[suite] },
+  // Product suites get hardened launch options from the guarded fixture; framework browser checks need them here.
+  use: suite === 'framework'
+    ? { launchOptions: hardenLaunchOptions({}) }
+    : { ...devices['Desktop Chrome'], baseURL, trace: TRACE[suite] },
 };
 
 export default defineConfig({

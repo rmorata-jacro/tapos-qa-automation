@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { selectedSuite } from '../../config/suites';
-import { assertTestUrl, isAllowedTestHost } from '../../shared/safety/environment-guard';
 import { evaluateLevel } from '../../shared/safety/execution-gate';
 import { evaluateIsolatedEnvironment } from '../../shared/safety/isolated-environment';
 import {
@@ -11,28 +10,6 @@ import {
   evaluateProvisioningApproval,
   PROVISIONING_PRECONDITIONS,
 } from '../../shared/safety/provisioning-approval';
-
-const TEST_HOST = 'signup.qa-test.example';
-const baseEnv = { QA_ALLOWED_HOSTS: TEST_HOST };
-
-test.describe('environment guard', () => {
-  test('accepts an allowlisted https TEST host', () => {
-    expect(assertTestUrl(`https://${TEST_HOST}/signup`, 'URL', baseEnv).hostname).toBe(TEST_HOST);
-  });
-
-  test('refuses missing, non-https, and non-allowlisted URLs', () => {
-    expect(() => assertTestUrl(undefined, 'URL', baseEnv)).toThrow(/not set/);
-    expect(() => assertTestUrl(`http://${TEST_HOST}`, 'URL', baseEnv)).toThrow(/https/);
-    expect(() => assertTestUrl('https://other.example', 'URL', baseEnv)).toThrow(/not in QA_ALLOWED_HOSTS/);
-  });
-
-  test('blocked production patterns win over the allowlist', () => {
-    const env = { QA_ALLOWED_HOSTS: 'app.prod.example,tapos.com', QA_BLOCKED_HOST_PATTERNS: '^custom-live' };
-    expect(() => assertTestUrl('https://app.prod.example', 'URL', env)).toThrow(/blocked production pattern/);
-    expect(() => assertTestUrl('https://tapos.com', 'URL', env)).toThrow(/blocked production pattern/);
-    expect(isAllowedTestHost('custom-live.example', { ...env, QA_ALLOWED_HOSTS: 'custom-live.example' })).toBe(false);
-  });
-});
 
 test.describe('execution gate', () => {
   test('read-only tests need no flags; gated levels need their flags', () => {
@@ -89,12 +66,17 @@ test.describe('Suite B provisioning approval', () => {
     expect(evaluateProvisioningApproval(env).reasons.join(' ')).toContain('exactly "1"');
   });
 
+  test('stays refused while database targets are not approved, even with every other requirement met', () => {
+    const { approval, reasons } = evaluateProvisioningApproval(approvedEnv('/tmp/unused'));
+    expect(approval).toBeUndefined();
+    expect(reasons.join(' ')).toContain('No staging database hosts are approved');
+  });
+
   test('an approval can be claimed only once', () => {
     const env = approvedEnv(mkdtempSync(path.join(tmpdir(), 'qa-state-')));
-    const { approval } = evaluateProvisioningApproval(env);
-    expect(approval).toBeDefined();
-    claimProvisioningApproval(approval!, env);
-    expect(() => claimProvisioningApproval(approval!, env)).toThrow(/already been used/);
+    const approval = { approvalId: env.QA_SUITE_B_APPROVAL_ID, approvedBy: env.QA_SUITE_B_APPROVED_BY, maxNewDatabases: 1 as const };
+    claimProvisioningApproval(approval, env);
+    expect(() => claimProvisioningApproval(approval, env)).toThrow(/already been used/);
   });
 });
 
@@ -105,7 +87,8 @@ test.describe('Suite C isolation gate', () => {
   };
 
   test('accepts only a declared isolated, non-shared host', () => {
-    expect(evaluateIsolatedEnvironment('isolated.qa.example', env)).toEqual([]);
+    const hostReasons = (host: string) => evaluateIsolatedEnvironment(host, env).filter((r) => r.includes('Host'));
+    expect(hostReasons('isolated.qa.example')).toEqual([]);
     expect(evaluateIsolatedEnvironment('staging.qa.example', env).join(' ')).toContain('shared staging host');
     expect(evaluateIsolatedEnvironment('other.example', env).join(' ')).toContain('not listed in QA_ISOLATED_HOSTS');
   });

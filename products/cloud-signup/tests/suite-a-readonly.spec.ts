@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test } from '../../../shared/safety/guarded-test';
-import { assertTestUrl } from '../../../shared/safety/environment-guard';
+import { assertStagingUrl } from '../../../shared/safety/environment-guard';
 import { fetchSignupOptions } from '../api/signup-options-client';
 import { int3437Case, requireContract } from '../helpers/int-3437-case';
 import { SignupLandingPage } from '../pages/signup-landing-page';
@@ -64,7 +64,7 @@ test(A03.title, A03.details, async ({ page }) => {
   const [landingPath, behaviour] = requireContract(paths.signupLanding, ui.featureGateBehaviour);
   const gateOffBase = process.env.CLOUD_SIGNUP_GATE_OFF_BASE_URL;
   test.skip(!gateOffBase, 'BLOCKED: CLOUD_SIGNUP_GATE_OFF_BASE_URL (a TEST host with the signup gate OFF) is not configured.');
-  const target = new URL(landingPath, assertTestUrl(gateOffBase, 'CLOUD_SIGNUP_GATE_OFF_BASE_URL'));
+  const target = new URL(landingPath, assertStagingUrl(gateOffBase, 'CLOUD_SIGNUP_GATE_OFF_BASE_URL'));
 
   const response = await page.goto(target.toString());
 

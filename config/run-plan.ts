@@ -1,9 +1,12 @@
 import { entriesForSuite } from '../products/cloud-signup/int-3437-test-catalog';
+import { evaluateDatabaseTargets } from '../shared/safety/database-guard';
+import { assertStagingUrl } from '../shared/safety/environment-guard';
 import { evaluateLevel } from '../shared/safety/execution-gate';
 import { evaluateIsolatedEnvironment } from '../shared/safety/isolated-environment';
 import { evaluateProvisioningApproval } from '../shared/safety/provisioning-approval';
 import { redactEmail } from '../shared/safety/redaction';
 import { SAFETY_POLICIES } from '../shared/safety/safety-levels';
+import { APPROVED_STAGING, PRODUCTION_URLS } from './environments';
 import { loadLocalEnv } from './load-env';
 import { selectedSuite, type SuiteSelection } from './suites';
 
@@ -22,7 +25,18 @@ function host(raw: string | undefined): string {
 
 /** Human-readable statement of what a suite run will do, printed before every run. */
 export function describeRunPlan(suite: SuiteSelection, env: Env = process.env): string {
-  const lines = [`=== INT-3437 run plan: suite ${suite} ===`, `Target environment host: ${host(env.CLOUD_SIGNUP_BASE_URL)}`];
+  let urlStatus: string;
+  try {
+    urlStatus = `${assertStagingUrl(env.CLOUD_SIGNUP_BASE_URL, 'CLOUD_SIGNUP_BASE_URL').origin} (approved staging)`;
+  } catch (error) {
+    urlStatus = `REFUSED — ${(error as Error).message}`;
+  }
+  const lines = [
+    `=== INT-3437 run plan: suite ${suite} ===`,
+    `Configured base URL: ${urlStatus}`,
+    `Approved staging hosts (code): ${APPROVED_STAGING.hosts.join(', ')}`,
+    `Production (always blocked): ${PRODUCTION_URLS.join(', ')}`,
+  ];
   if (suite === 'framework') {
     lines.push('Framework self-tests only: no TEST/staging traffic, no writes. Browser checks use a local loopback server.');
     return lines.join('\n');
@@ -51,6 +65,12 @@ export function describeRunPlan(suite: SuiteSelection, env: Env = process.env): 
     `Nightly-safe: ${entries.every((e) => SAFETY_POLICIES[e.level].nightlyAllowed) ? 'yes' : 'NO'}`,
   );
 
+  if (suite === 'B' || suite === 'C') {
+    const { targets, reasons } = evaluateDatabaseTargets(env);
+    lines.push('', 'Database targets (credentials never shown):');
+    for (const t of targets) lines.push(`  ${t.system}: ${t.host}${t.port ? `:${t.port}` : ''}/${t.database}`);
+    lines.push(`  check: ${reasons.length ? `REFUSED — ${reasons.join(' ')}` : 'approved staging (DNS verified at run time)'}`);
+  }
   if (suite === 'B') {
     const { reasons } = evaluateProvisioningApproval(env);
     lines.push('', `Suite B approval gate: ${reasons.length ? `REFUSED — ${reasons.join(' ')}` : 'satisfied'}`);

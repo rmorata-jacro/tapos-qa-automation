@@ -1,4 +1,4 @@
-import { applyNetworkPolicy } from '../../../shared/safety/network-policy';
+import { newGuardedContext } from '../../../shared/safety/browser-hardening';
 import { int3437Case, requireContract, requireEnv } from '../../../products/cloud-signup/helpers/int-3437-case';
 import { VerificationPage } from '../../../products/cloud-signup/pages/verification-page';
 import { signupContract } from '../../../products/cloud-signup/signup-contract';
@@ -27,8 +27,7 @@ const B02 = int3437Case('TC-B02');
 test(B02.title, B02.details, async ({ provisionedSignup: signup, browser, baseURL }) => {
   requireContract(ui.usedTokenMessage);
   test.skip(!signup.live, 'Verification link is held in memory only and is unavailable in a resumed worker.');
-  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
-  await applyNetworkPolicy(context, { level: 'provisioning', allowedMutations: [] });
+  const { context } = await newGuardedContext(browser, { level: 'provisioning', allowedMutations: [], baseURL });
   const verification = new VerificationPage(await context.newPage(), baseURL!);
 
   await verification.openLink(signup.live!.verificationLink);
@@ -112,8 +111,7 @@ test(RR04.title, RR04.details, async ({ provisionedSignup: signup, browser, base
     siteLoginPath, provisioning.templateSitecode, ui.loginRejectedMessage, ui.loginEmailLabel, ui.loginPasswordLabel, ui.loginButton,
   );
   test.skip(!signup.live, 'New user password is held in memory only and is unavailable in a resumed worker.');
-  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
-  await applyNetworkPolicy(context, { level: 'provisioning', allowedMutations: [] });
+  const { context } = await newGuardedContext(browser, { level: 'provisioning', allowedMutations: [], baseURL });
   const page = await context.newPage();
   await page.goto(loginPathFor(templateSitecode));
 

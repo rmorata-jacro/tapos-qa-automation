@@ -1,3 +1,5 @@
+import { requireStagingDatabases } from '../../../shared/safety/database-guard';
+
 export type SignupRequestStatus = 'pending' | 'provisioning' | 'completed' | 'failed' | 'not-found';
 
 /**
@@ -20,7 +22,9 @@ export interface SignupStateQueries {
   schemaFingerprint(sitecode: string): Promise<string>;
 }
 
-export function resolveSignupStateQueries(env: Record<string, string | undefined> = process.env): SignupStateQueries {
+/** Verifies every Websales, Membership, and POS target is approved non-production staging before any adapter connects. */
+export async function resolveSignupStateQueries(env: Record<string, string | undefined> = process.env): Promise<SignupStateQueries> {
+  await requireStagingDatabases(env);
   const adapter = env.QA_SIGNUP_STATE_ADAPTER;
   throw new Error(
     `TEST DATA PREREQUISITE NOT MET: ${

@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { isAllowedTestHost } from '../../../shared/safety/environment-guard';
+import { isAllowedHost } from '../../../shared/safety/environment-guard';
 import { navigateSensitive } from '../../../shared/safety/guarded-test';
 import { contractValue, signupContract } from '../signup-contract';
 
@@ -10,8 +10,8 @@ export class VerificationPage {
 
   /** Opens a link received by email. The URL contains a live token and is never logged. */
   async openLink(link: URL): Promise<void> {
-    if (!isAllowedTestHost(link.hostname)) {
-      throw new Error(`Verification link points to "${link.hostname}", which is not an approved TEST host. Not opened.`);
+    if (!isAllowedHost(link.hostname)) {
+      throw new Error(`Verification link points to "${link.hostname}", which is not an approved staging host. Not opened.`);
     }
     await navigateSensitive(this.page, link, 'verification link');
   }

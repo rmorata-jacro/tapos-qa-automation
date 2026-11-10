@@ -1,12 +1,10 @@
 /**
- * Hostname patterns that must never be targeted by automation.
- *
- * Known production hostnames for TaPoS/JACRO products must be added here once
- * confirmed. Additional patterns can be supplied at runtime through
- * QA_BLOCKED_HOST_PATTERNS, but runtime values can only add blocks, never
- * remove these.
+ * Hostname patterns that must never be targeted by automation. A blocked
+ * pattern always wins over the approved staging allowlist. Runtime values
+ * (QA_BLOCKED_HOST_PATTERNS) can only add blocks, never remove these.
  */
-export const BLOCKED_HOST_PATTERNS: RegExp[] = [
+export const BLOCKED_HOST_PATTERNS: readonly RegExp[] = [
+  /(^|\.)internetticketing\.com$/i,
   /^(www\.)?jacro\.com$/i,
   /^(www\.)?tapos\.com$/i,
   /(^|\.)prod(uction)?[.-]/i,

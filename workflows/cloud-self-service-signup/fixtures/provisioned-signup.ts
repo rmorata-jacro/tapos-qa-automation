@@ -3,8 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test as guardedTest } from '../../../shared/safety/guarded-test';
-import { assertTestUrl } from '../../../shared/safety/environment-guard';
-import { applyNetworkPolicy } from '../../../shared/safety/network-policy';
+import { newGuardedContext } from '../../../shared/safety/browser-hardening';
+import { assertStagingUrl } from '../../../shared/safety/environment-guard';
 import {
   approvalLedgerDir,
   claimProvisioningApproval,
@@ -111,10 +111,10 @@ export const test = guardedTest.extend<{ provisionedSignup: ProvisionedSignup },
   provisionedSignupWorker: [
     async ({ browser }, use, workerInfo) => {
       const approval = requireProvisioningApproval();
-      const baseURL = assertTestUrl(workerInfo.project.use.baseURL, 'CLOUD_SIGNUP_BASE_URL').toString();
+      const baseURL = assertStagingUrl(workerInfo.project.use.baseURL, 'CLOUD_SIGNUP_BASE_URL').toString();
       const questions = unconfirmedQuestions(REQUIRED_CONTRACT);
       if (questions.length) throw new ContractUnconfirmedError(questions);
-      const state = resolveSignupStateQueries();
+      const state = await resolveSignupStateQueries();
       const inbox = resolveTestInbox();
 
       if (existsSync(runRecordFile(approval.approvalId))) {
@@ -145,8 +145,7 @@ export const test = guardedTest.extend<{ provisionedSignup: ProvisionedSignup },
       };
       writeRunRecord(record);
 
-      const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
-      await applyNetworkPolicy(context, { level: 'provisioning', allowedMutations: [] });
+      const { context } = await newGuardedContext(browser, { level: 'provisioning', allowedMutations: [], baseURL });
       const page = await context.newPage();
       const password = `Qa!${randomBytes(12).toString('base64url')}9`;
 
