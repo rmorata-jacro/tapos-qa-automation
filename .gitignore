@@ -1,3 +1,11 @@
+# QA automation output and local run state (may reference staging sitecodes)
+reports/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.qa-state/
+
 # Logs
 logs
 *.log

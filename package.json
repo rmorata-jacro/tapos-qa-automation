@@ -1,0 +1,33 @@
+{
+  "name": "tapos-qa-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated validation of TaPoS/JACRO products and interconnected workflows.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "cross-env QA_SUITE=framework playwright test",
+    "test:framework": "cross-env QA_SUITE=framework playwright test",
+    "plan:a-readonly": "tsx config/run-plan.ts A-readonly && cross-env QA_SUITE=A-readonly playwright test --list",
+    "plan:a-gated": "tsx config/run-plan.ts A-gated && cross-env QA_SUITE=A-gated playwright test --list",
+    "plan:b": "tsx config/run-plan.ts B && cross-env QA_SUITE=B playwright test --list",
+    "plan:c": "tsx config/run-plan.ts C && cross-env QA_SUITE=C playwright test --list",
+    "test:a-readonly": "cross-env QA_SUITE=A-readonly playwright test",
+    "test:nightly": "cross-env QA_RUN_CONTEXT=nightly QA_SUITE=A-readonly playwright test",
+    "test:a-gated": "cross-env QA_SUITE=A-gated playwright test",
+    "test:b": "cross-env QA_SUITE=B playwright test",
+    "test:c": "cross-env QA_SUITE=C playwright test",
+    "report": "playwright show-report reports/html"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rmorata-jacro/tapos-qa-automation.git"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
