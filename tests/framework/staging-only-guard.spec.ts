@@ -81,7 +81,7 @@ test.describe('staging URL guard', () => {
   });
 
   test('fails closed when the staging URL is missing or invalid, for every staging suite', () => {
-    for (const suite of ['A-readonly', 'A-gated', 'B', 'C'] as const) {
+    for (const suite of ['local-access', 'A-readonly', 'A-gated', 'B', 'C'] as const) {
       expect(() => resolveBaseUrl(suite, {}), suite).toThrow(/not set/);
       expect(() => resolveBaseUrl(suite, { CLOUD_SIGNUP_BASE_URL: '   ' }), suite).toThrow(/not set/);
       expect(() => resolveBaseUrl(suite, { CLOUD_SIGNUP_BASE_URL: 'it.taposapp.com' }), suite).toThrow(/not a valid URL/);

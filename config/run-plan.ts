@@ -41,6 +41,18 @@ export function describeRunPlan(suite: SuiteSelection, env: Env = process.env): 
     lines.push('Framework self-tests only: no TEST/staging traffic, no writes. Browser checks use a local loopback server.');
     return lines.join('\n');
   }
+  if (suite === 'local-access') {
+    lines.push(
+      'One read-only navigation: GET /signup/ on the approved staging host.',
+      'Fresh browser context: no Chrome profile, cookies, or login session.',
+      'No form submission, signup, email, database, or provisioning.',
+      'Retries: 0. Other INT-3437 scenarios are not selected.',
+      'Emails sent: no',
+      'Signup records created: no',
+      'Databases created: no',
+    );
+    return lines.join('\n');
+  }
 
   lines.push('Test accounts / inboxes:');
   for (const name of ACCOUNT_VARS) lines.push(`  ${name}: ${env[name] ? redactEmail(env[name]!) : 'not set'}`);
