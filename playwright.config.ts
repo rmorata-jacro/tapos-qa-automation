@@ -42,6 +42,7 @@ export default defineConfig({
     ['list'],
     ['html', { outputFolder: 'reports/html', open: 'never' }],
     ['json', { outputFile: 'reports/results.json' }],
+    ['./shared/reporting/classification-reporter.ts', { outputFile: 'reports/classified-results.json' }],
   ],
   use: {
     screenshot: 'off',

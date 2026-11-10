@@ -91,9 +91,15 @@ from the run record instead of provisioning again.
 
 Confirmed staging routes: `/signup/`, `/signup/complete/?token=...`, and `/signup/api/options/`.
 The options API response observed on 2026-11-10 is recorded in `observed-signup-options.ts`.
-The signup and verification pages currently stop on Cloudflare's bot check: the read-only guard
-aborts its POST, and `challenges.cloudflare.com` is not an approved host. Those tests report
-BLOCKED until that page can be reached without weakening the host allowlist.
+Cloudflare currently answers this runner with a managed challenge (HTTP 403,
+`cf-mitigated: challenge`, title "Just a moment..."). The guarded fixtures detect it on page
+navigations and API responses (`shared/reporting/security-challenge.ts`), stop the test, and attach
+the status, ray ID, and safe headers as `security-challenge-evidence`. The classification reporter
+writes `reports/classified-results.json`, where such tests appear as
+`BLOCKED — Infrastructure / Security Challenge`, not as functional failures, even if the raw
+Playwright status is failed. An HTTP 403 without Cloudflare's challenge markers is still reported
+as a normal result. The fix is infrastructure-approved staging access for the QA runner; the
+automation never solves or bypasses the challenge.
 
 Future gated tests use `QA_TEST_INBOX_ADDRESS` with aliases `r.morata+int3437-{testId}@jacro.com`
 and the local `QA_TEST_PASSWORD` secret. The read-only tests do not use either value.
@@ -101,8 +107,8 @@ and the local `QA_TEST_PASSWORD` secret. The read-only tests do not use either v
 ## Before these tests can pass
 
 1. Confirm the remaining entries in `signup-contract.ts`. Until then, dependent tests report
-   `BLOCKED` with the open question. Reaching the signup form also requires a decision on the
-   Cloudflare bot check, which the read-only guard currently stops.
+   `BLOCKED` with the open question. Reaching the signup form also requires infrastructure to
+   stop challenging the approved QA runner on `it.taposapp.com` (staging only).
 2. Implement a TEST inbox adapter (`shared/test-data/test-inbox.ts`).
 3. Agree and implement safe state queries (`workflows/cloud-self-service-signup/state-checks`).
 4. Add known production hostnames to `config/blocked-hosts.ts`.

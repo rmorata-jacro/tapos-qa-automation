@@ -3,7 +3,6 @@ import { expect, test } from '../../../shared/safety/guarded-test';
 import { assertStagingUrl } from '../../../shared/safety/environment-guard';
 import { fetchSignupOptions } from '../api/signup-options-client';
 import { int3437Case, requireContract } from '../helpers/int-3437-case';
-import { stagingBotCheckVisible, stopForBotCheck } from '../helpers/staging-bot-check';
 import { SignupLandingPage } from '../pages/signup-landing-page';
 import { VerificationPage } from '../pages/verification-page';
 import { signupContract } from '../signup-contract';
@@ -26,14 +25,12 @@ function isValidTimeZone(zone: string): boolean {
 }
 
 const A01 = int3437Case('TC-A01');
-test(A01.title, A01.details, async ({ page }, testInfo) => {
+test(A01.title, A01.details, async ({ page, securityChallenge }) => {
   requireContract(paths.signupLanding);
   const landing = new SignupLandingPage(page);
 
   await landing.open();
-  if (await stagingBotCheckVisible(page)) {
-    await stopForBotCheck(page, testInfo, 'The heading, email field, and signup button were not available to check.');
-  }
+  await securityChallenge.stopIfChallenged('The heading, email field, and signup button were not reached.', page);
   requireContract(ui.landingHeading, ui.emailLabel, ui.submitSignupButton);
 
   await expect(landing.heading(), 'Signup landing heading should be visible').toBeVisible();
@@ -95,19 +92,16 @@ test.describe(A05.title, () => {
   ];
 
   for (const [label, makeToken] of syntheticTokens) {
-    test(`${A05.title} [${label}]`, A05.details, async ({ page, baseURL }, testInfo) => {
+    test(`${A05.title} [${label}]`, A05.details, async ({ page, baseURL, securityChallenge }) => {
       requireContract(paths.verification);
       const verification = new VerificationPage(page, baseURL!);
 
       await verification.openWithToken(makeToken());
       const passwordFields = await page.locator('input[type="password"]').count();
-      if (await stagingBotCheckVisible(page)) {
-        await stopForBotCheck(
-          page,
-          testInfo,
-          `Token rejection was not reached for the ${label}. Password fields on the page: ${passwordFields}. The cinema-details form was not shown.`,
-        );
-      }
+      await securityChallenge.stopIfChallenged(
+        `Token handling was not reached for the ${label}. Password fields on the page: ${passwordFields}.`,
+        page,
+      );
       requireContract(ui.invalidTokenMessage);
 
       await expect(verification.invalidTokenMessage(), `A ${label} must be rejected with the invalid-token message`).toBeVisible();

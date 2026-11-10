@@ -29,13 +29,16 @@ const CONTRACT = 'Expected behaviour unconfirmed in signup-contract.ts (INT-3437
 const INBOX = 'TEST inbox adapter not configured (shared/test-data/test-inbox.ts).';
 const STATE = 'Safe state-query adapter not configured (workflows/cloud-self-service-signup/state-checks).';
 const FIXTURE_ONLY = 'No writes beyond the shared Suite B signup fixture (read-only state queries)';
+const SECURITY_CHALLENGE =
+  'BLOCKED — Infrastructure / Security Challenge: it.taposapp.com answers this runner with a Cloudflare managed challenge ' +
+  '(HTTP 403, cf-mitigated: challenge, "Just a moment..."). Needs infrastructure-approved staging access for the QA runner; not an INT-3437 functional result.';
 const SOURCE = 'Implementation source not reviewed; Suite C needs mocked infrastructure or disposable databases in the product repository.';
 
 export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   'TC-A01': {
     id: 'TC-A01', title: 'Signup landing page renders the signup entry form', suite: 'A-readonly', level: 'readonly',
     status: 'BLOCKED', expectedWrites: [], risks: [],
-    blockers: ['Cloudflare bot check prevents the signup form from loading under the read-only guard. Heading, email label, and button name are still unconfirmed.'],
+    blockers: [SECURITY_CHALLENGE, 'Heading, email label, and button name are still unconfirmed.'],
   },
   'TC-A02': {
     id: 'TC-A02', title: 'Invalid email addresses are rejected without creating a signup request', suite: 'A-readonly',
@@ -56,7 +59,7 @@ export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   'TC-A05': {
     id: 'TC-A05', title: 'Malformed and tampered verification tokens are rejected', suite: 'A-readonly', level: 'readonly',
     status: 'BLOCKED', expectedWrites: [], risks: ['RR-03'],
-    blockers: ['Cloudflare bot check prevents the verification page from loading under the read-only guard. The rejection message is still unconfirmed.'],
+    blockers: [SECURITY_CHALLENGE, 'The rejection message is still unconfirmed.'],
     limits: ['Expired tokens need an aged genuine token and remain manual until a safe expiry mechanism is confirmed.'],
   },
   'TC-A06': {
@@ -75,7 +78,7 @@ export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   'TC-A08': {
     id: 'TC-A08', title: 'Signup options API returns valid regions and timezones', suite: 'A-readonly', level: 'readonly',
     status: 'BLOCKED', expectedWrites: [], risks: ['RR-05'],
-    blockers: ['The guarded GET reached staging and returned HTTP 403 HTML (Just a moment...) on the official run, not the JSON observed earlier. Not retried.'],
+    blockers: [SECURITY_CHALLENGE, 'Original observation: HTTP 200 JSON on the earlier observation request, then HTTP 403 challenge HTML on the official run. Not retried.'],
   },
   'TC-A09': {
     id: 'TC-A09', title: 'Region and timezone selectors offer the options returned by the API', suite: 'A-gated',

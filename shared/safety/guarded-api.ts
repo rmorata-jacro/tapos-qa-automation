@@ -21,6 +21,8 @@ export interface GuardedApiOptions {
   allowedMutations: RegExp[];
   baseURL?: string;
   hostPolicy?: HostPolicy;
+  /** Called with every response received, including redirect hops. */
+  onResponse?: (response: APIResponse) => Promise<void>;
 }
 
 /**
@@ -43,6 +45,7 @@ export function guardApiContext(context: APIRequestContext, options: GuardedApiO
         throw new BlockedRequestError(`${method} ${redactUrl(url)} is not permitted for "${options.level}" tests.`);
       }
       const response = await context.fetch(url, { ...fetchOptions, method, maxRedirects: 0 });
+      await options.onResponse?.(response);
       const location = response.headers()['location'];
       const isRedirect = response.status() >= 300 && response.status() < 400 && location;
       if (!isRedirect || !SAFE_METHODS.has(method)) return response;

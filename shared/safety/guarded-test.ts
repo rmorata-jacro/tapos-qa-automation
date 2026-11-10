@@ -1,5 +1,6 @@
 import { test as base, type Page, type TestInfo } from '@playwright/test';
 import { APPROVED_STAGING } from '../../config/environments';
+import { SecurityChallengeMonitor } from '../reporting/challenge-monitor';
 import { guardContext, hardenLaunchOptions } from './browser-hardening';
 import { verifyHostResolution } from './dns-guard';
 import { assertStagingUrl, proxyEnvironmentReasons, UnsafeEnvironmentError } from './environment-guard';
@@ -25,6 +26,7 @@ export interface GuardedFixtures {
   safetyLevel: SafetyLevel;
   networkPolicy: NetworkPolicyHandle;
   readonlyApi: ReadonlyApi;
+  securityChallenge: SecurityChallengeMonitor;
 }
 
 export interface GuardedWorkerFixtures {
@@ -109,11 +111,23 @@ export const test = base.extend<GuardedFixtures, GuardedWorkerFixtures>({
     await use(await guardContext(context, { level: safetyLevel, allowedMutations, baseURL }));
   },
 
-  request: async ({ request, safetyLevel, allowedMutations, baseURL }, use) => {
-    await use(guardApiContext(request, { level: safetyLevel, allowedMutations, baseURL }));
+  securityChallenge: async ({}, use, testInfo) => {
+    const monitor = new SecurityChallengeMonitor(testInfo);
+    await use(monitor);
+    await monitor.attachEvidence();
   },
 
-  page: async ({ page, networkPolicy, sensitiveSelectors }, use, testInfo) => {
+  request: async ({ request, safetyLevel, allowedMutations, baseURL, securityChallenge }, use) => {
+    await use(guardApiContext(request, {
+      level: safetyLevel,
+      allowedMutations,
+      baseURL,
+      onResponse: (response) => securityChallenge.inspectApiResponse(response),
+    }));
+  },
+
+  page: async ({ page, networkPolicy, sensitiveSelectors, securityChallenge }, use, testInfo) => {
+    securityChallenge.watchPage(page);
     await use(page);
     if (testInfo.status !== testInfo.expectedStatus) await captureRedactedEvidence(page, testInfo, sensitiveSelectors);
     if (networkPolicy.allowedWrites.length) {
@@ -127,11 +141,12 @@ export const test = base.extend<GuardedFixtures, GuardedWorkerFixtures>({
     }
   },
 
-  readonlyApi: async ({ request, baseURL }, use) => {
+  readonlyApi: async ({ request, baseURL, securityChallenge }, use) => {
     const api = guardApiContext(request, { level: 'readonly', allowedMutations: [], baseURL });
     await use({
       async getJson<T>(pathOrUrl: string) {
         const response = await api.get(pathOrUrl, { headers: { accept: 'application/json' } });
+        await securityChallenge.stopIfChallenged(`JSON was not returned by ${redactUrl(response.url())}.`);
         const text = await response.text();
         try {
           return { status: response.status(), body: JSON.parse(text) as T };
