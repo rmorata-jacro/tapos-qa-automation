@@ -66,6 +66,18 @@ test.describe('browser request policy', () => {
     expect(policy.violations.join('\n')).toContain('POST');
   });
 
+  test('a Cloudflare bot-check POST is aborted and does not fail the read-only policy', async ({ context, page }) => {
+    const policy = await applyNetworkPolicy(context, { level: 'readonly', allowedMutations: [], hostPolicy: loopbackPolicy });
+    await page.goto(`${origin}/page`);
+
+    expect(await send(page, '/cdn-cgi/challenge-platform/h/b/test')).toBe('aborted');
+
+    expect(received).toEqual(['GET /page']);
+    expect(policy.violations).toEqual([]);
+    expect(policy.allowedWrites).toEqual([]);
+    expect(policy.blockedRequests.join('\n')).toContain('Bot-check POST aborted');
+  });
+
   test('gated tests may only mutate allowlisted endpoints', async ({ context, page }) => {
     const policy = await applyNetworkPolicy(context, { level: 'writes-signup', allowedMutations: [/^\/signup-request$/], hostPolicy: loopbackPolicy });
     await page.goto(`${origin}/page`);

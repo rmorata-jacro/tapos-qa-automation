@@ -89,10 +89,20 @@ The single signup fixture writes a non-secret run record to
 and never deletes staging data. An approval can be claimed once; a restarted worker resumes
 from the run record instead of provisioning again.
 
+Confirmed staging routes: `/signup/`, `/signup/complete/?token=...`, and `/signup/api/options/`.
+The options API response observed on 2026-11-10 is recorded in `observed-signup-options.ts`.
+The signup and verification pages currently stop on Cloudflare's bot check: the read-only guard
+aborts its POST, and `challenges.cloudflare.com` is not an approved host. Those tests report
+BLOCKED until that page can be reached without weakening the host allowlist.
+
+Future gated tests use `QA_TEST_INBOX_ADDRESS` with aliases `r.morata+int3437-{testId}@jacro.com`
+and the local `QA_TEST_PASSWORD` secret. The read-only tests do not use either value.
+
 ## Before these tests can pass
 
-1. Confirm every entry in `signup-contract.ts` from INT-3437, its comments, INT-3446, and the
-   implementation. Until then, dependent tests report `BLOCKED` with the open question.
+1. Confirm the remaining entries in `signup-contract.ts`. Until then, dependent tests report
+   `BLOCKED` with the open question. Reaching the signup form also requires a decision on the
+   Cloudflare bot check, which the read-only guard currently stops.
 2. Implement a TEST inbox adapter (`shared/test-data/test-inbox.ts`).
 3. Agree and implement safe state queries (`workflows/cloud-self-service-signup/state-checks`).
 4. Add known production hostnames to `config/blocked-hosts.ts`.

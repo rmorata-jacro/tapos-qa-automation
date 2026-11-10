@@ -34,7 +34,8 @@ const SOURCE = 'Implementation source not reviewed; Suite C needs mocked infrast
 export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   'TC-A01': {
     id: 'TC-A01', title: 'Signup landing page renders the signup entry form', suite: 'A-readonly', level: 'readonly',
-    status: 'BLOCKED', expectedWrites: [], risks: [], blockers: [CONTRACT],
+    status: 'BLOCKED', expectedWrites: [], risks: [],
+    blockers: ['Cloudflare bot check prevents the signup form from loading under the read-only guard. Heading, email label, and button name are still unconfirmed.'],
   },
   'TC-A02': {
     id: 'TC-A02', title: 'Invalid email addresses are rejected without creating a signup request', suite: 'A-readonly',
@@ -54,7 +55,8 @@ export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   },
   'TC-A05': {
     id: 'TC-A05', title: 'Malformed and tampered verification tokens are rejected', suite: 'A-readonly', level: 'readonly',
-    status: 'BLOCKED', expectedWrites: [], risks: ['RR-03'], blockers: [CONTRACT],
+    status: 'BLOCKED', expectedWrites: [], risks: ['RR-03'],
+    blockers: ['Cloudflare bot check prevents the verification page from loading under the read-only guard. The rejection message is still unconfirmed.'],
     limits: ['Expired tokens need an aged genuine token and remain manual until a safe expiry mechanism is confirmed.'],
   },
   'TC-A06': {
@@ -72,7 +74,8 @@ export const INT_3437_CATALOG: Record<string, CatalogEntry> = {
   },
   'TC-A08': {
     id: 'TC-A08', title: 'Signup options API returns valid regions and timezones', suite: 'A-readonly', level: 'readonly',
-    status: 'BLOCKED', expectedWrites: [], risks: ['RR-05'], blockers: [CONTRACT],
+    status: 'BLOCKED', expectedWrites: [], risks: ['RR-05'],
+    blockers: ['The guarded GET reached staging and returned HTTP 403 HTML (Just a moment...) on the official run, not the JSON observed earlier. Not retried.'],
   },
   'TC-A09': {
     id: 'TC-A09', title: 'Region and timezone selectors offer the options returned by the API', suite: 'A-gated',

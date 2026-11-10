@@ -1,3 +1,5 @@
+import { OBSERVED_SIGNUP_REGIONS } from './observed-signup-options';
+
 /**
  * Expected behaviour of Cloud Self-Service Signup (INT-3437), as agreed in the
  * ticket, its comments, and the linked INT-3446 requirements.
@@ -41,6 +43,34 @@ export interface SignupOptions {
   regions: { code: string; label: string; timezones: string[] }[];
 }
 
+const ROUTE_SOURCE = 'Confirmed INT-3437 staging route.';
+const OPTIONS_SOURCE = 'GET /signup/api/options/ on https://it.taposapp.com, observed 2026-11-10.';
+
+/** Maps the observed options payload onto the normalised region list. Throws if the shape differs. */
+export function parseSignupOptions(body: unknown): SignupOptions {
+  if (!body || typeof body !== 'object') throw new Error('Signup options response was not a JSON object.');
+  const record = body as Record<string, unknown>;
+  if (record.ok !== true) throw new Error('Signup options response did not report ok: true.');
+  if (!Array.isArray(record.locales)) throw new Error('Signup options response has no locales array.');
+  const lists = record.localeTimezonesList;
+  if (!lists || typeof lists !== 'object') throw new Error('Signup options response has no localeTimezonesList object.');
+  return {
+    regions: record.locales.map((entry, index) => {
+      if (!entry || typeof entry !== 'object') throw new Error(`locales[${index}] was not an object.`);
+      const code = (entry as { value?: unknown }).value;
+      const label = (entry as { label?: unknown }).label;
+      if (typeof code !== 'string' || typeof label !== 'string') {
+        throw new Error(`locales[${index}] is missing a string value or label.`);
+      }
+      const zones = (lists as Record<string, unknown>)[code];
+      if (!Array.isArray(zones) || zones.some((zone) => typeof zone !== 'string')) {
+        throw new Error(`Locale ${code} has no string timezone list.`);
+      }
+      return { code, label, timezones: zones };
+    }),
+  };
+}
+
 export type FeatureGateBehaviour =
   | { kind: 'http-status'; status: number }
   | { kind: 'redirect'; to: RegExp }
@@ -48,12 +78,13 @@ export type FeatureGateBehaviour =
 
 export const signupContract = {
   paths: {
-    signupLanding: unconfirmed<string>('Path of the public signup landing page.'),
-    verification: unconfirmed<(token: string) => string>(
-      'How the verification token is carried in the link (path segment or query parameter, and which name).',
+    signupLanding: confirmed('/signup/', ROUTE_SOURCE),
+    verification: confirmed(
+      (token: string) => `/signup/complete/?token=${encodeURIComponent(token)}`,
+      `${ROUTE_SOURCE} Token is the token query parameter.`,
     ),
     login: unconfirmed<string>('Path of the existing-user login page reached from signup.'),
-    signupOptionsApi: unconfirmed<string>('Path of the signup options API (TC-A08).'),
+    signupOptionsApi: confirmed('/signup/api/options/', OPTIONS_SOURCE),
     postSignupRedirect: unconfirmed<RegExp>('Expected post-signup redirect after auto-login (TC-B04).'),
   },
   ui: {
@@ -106,9 +137,14 @@ export const signupContract = {
     ),
     verificationEndpoint: unconfirmed<RegExp>('Pathname of the request that consumes a verification token.'),
     loginEndpoint: unconfirmed<RegExp>('Pathname of the existing-user login request.'),
-    parseSignupOptions: unconfirmed<(body: unknown) => SignupOptions>('Response shape of the signup options API.'),
-    expectedRegionTimezones: unconfirmed<Record<string, string[]>>(
-      'Risk 5: which timezones each region must offer (INT-3446).',
+    parseSignupOptions: confirmed(parseSignupOptions, `${OPTIONS_SOURCE} Keys used: ok, locales[].value, locales[].label, localeTimezonesList.`),
+    expectedRegions: confirmed(
+      OBSERVED_SIGNUP_REGIONS.map(({ code, label }) => ({ code, label })),
+      OPTIONS_SOURCE,
+    ),
+    expectedRegionTimezones: confirmed(
+      Object.fromEntries(OBSERVED_SIGNUP_REGIONS.map(({ code, timezones }) => [code, [...timezones]])),
+      OPTIONS_SOURCE,
     ),
     rateLimit: unconfirmed<{ maxRequests: number; windowSeconds: number; keyedBy: 'ip' | 'email' }>(
       'TC-A10: rate limit threshold, window, and key.',

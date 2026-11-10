@@ -5,6 +5,13 @@ import type { SafetyLevel } from './safety-levels';
 
 export const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/**
+ * Cloudflare bot-check submission. It is a POST to the staging host, so it is
+ * aborted for every safety level and is not treated as an allowed write.
+ * Aborting it stops the browser from getting past the interstitial.
+ */
+const BOT_CHECK_PATH = /^\/cdn-cgi\/challenge-platform\//;
+
 export interface NetworkPolicyOptions {
   level: SafetyLevel;
   /** Pathname patterns on the staging host that a gated test is allowed to mutate. */
@@ -79,6 +86,11 @@ export async function applyNetworkPolicy(
       } else {
         handle.blockedRequests.push(entry);
       }
+      return route.abort('blockedbyclient');
+    }
+
+    if (!SAFE_METHODS.has(method) && BOT_CHECK_PATH.test(url.pathname)) {
+      handle.blockedRequests.push(`Bot-check POST aborted (not forwarded): ${describe(method, url.toString())}`);
       return route.abort('blockedbyclient');
     }
 

@@ -3,6 +3,7 @@ import { expect, test } from '../../../shared/safety/guarded-test';
 import { assertStagingUrl } from '../../../shared/safety/environment-guard';
 import { fetchSignupOptions } from '../api/signup-options-client';
 import { int3437Case, requireContract } from '../helpers/int-3437-case';
+import { stagingBotCheckVisible, stopForBotCheck } from '../helpers/staging-bot-check';
 import { SignupLandingPage } from '../pages/signup-landing-page';
 import { VerificationPage } from '../pages/verification-page';
 import { signupContract } from '../signup-contract';
@@ -25,11 +26,15 @@ function isValidTimeZone(zone: string): boolean {
 }
 
 const A01 = int3437Case('TC-A01');
-test(A01.title, A01.details, async ({ page }) => {
-  requireContract(paths.signupLanding, ui.landingHeading, ui.emailLabel, ui.submitSignupButton);
+test(A01.title, A01.details, async ({ page }, testInfo) => {
+  requireContract(paths.signupLanding);
   const landing = new SignupLandingPage(page);
 
   await landing.open();
+  if (await stagingBotCheckVisible(page)) {
+    await stopForBotCheck(page, testInfo, 'The heading, email field, and signup button were not available to check.');
+  }
+  requireContract(ui.landingHeading, ui.emailLabel, ui.submitSignupButton);
 
   await expect(landing.heading(), 'Signup landing heading should be visible').toBeVisible();
   await expect(landing.emailInput(), 'Signup email field should be editable').toBeEditable();
@@ -90,40 +95,48 @@ test.describe(A05.title, () => {
   ];
 
   for (const [label, makeToken] of syntheticTokens) {
-    test(`${A05.title} [${label}]`, A05.details, async ({ page, baseURL }) => {
-      requireContract(paths.verification, ui.invalidTokenMessage);
+    test(`${A05.title} [${label}]`, A05.details, async ({ page, baseURL }, testInfo) => {
+      requireContract(paths.verification);
       const verification = new VerificationPage(page, baseURL!);
 
       await verification.openWithToken(makeToken());
+      const passwordFields = await page.locator('input[type="password"]').count();
+      if (await stagingBotCheckVisible(page)) {
+        await stopForBotCheck(
+          page,
+          testInfo,
+          `Token rejection was not reached for the ${label}. Password fields on the page: ${passwordFields}. The cinema-details form was not shown.`,
+        );
+      }
+      requireContract(ui.invalidTokenMessage);
 
       await expect(verification.invalidTokenMessage(), `A ${label} must be rejected with the invalid-token message`).toBeVisible();
+      expect(passwordFields, 'Cinema-details password field must not be available for an invalid token').toBe(0);
     });
   }
 });
 
 const A08 = int3437Case('TC-A08');
 test(A08.title, A08.details, async ({ readonlyApi }) => {
-  requireContract(paths.signupOptionsApi, api.parseSignupOptions);
+  const [, , expectedRegions, expectedZones] = requireContract(
+    paths.signupOptionsApi,
+    api.parseSignupOptions,
+    api.expectedRegions,
+    api.expectedRegionTimezones,
+  );
 
   const { status, options } = await fetchSignupOptions(readonlyApi);
 
   expect(status, 'Signup options API should respond 200').toBe(200);
-  expect(options.regions.length, 'Signup options should list at least one region').toBeGreaterThan(0);
-  const codes = options.regions.map((r) => r.code);
-  expect(new Set(codes).size, `Region codes must be unique: ${codes.join(', ')}`).toBe(codes.length);
+  expect(
+    options.regions.map((region) => ({ code: region.code, label: region.label })),
+    'Selectable regions and labels',
+  ).toEqual([...expectedRegions]);
   for (const region of options.regions) {
-    expect(region.timezones.length, `Region ${region.code} should offer at least one timezone`).toBeGreaterThan(0);
     const invalid = region.timezones.filter((zone) => !isValidTimeZone(zone));
     expect(invalid, `Region ${region.code} offers non-IANA timezones`).toEqual([]);
   }
-
-  if (api.expectedRegionTimezones.confirmed) {
-    const actual = Object.fromEntries(options.regions.map((r) => [r.code, [...r.timezones].sort()]));
-    const expected = Object.fromEntries(
-      Object.entries(api.expectedRegionTimezones.value).map(([code, zones]) => [code, [...zones].sort()]),
-    );
-    expect(actual, 'Region → timezone mapping must match INT-3446').toEqual(expected);
-  } else {
-    test.info().annotations.push({ type: 'coverage-limit', description: api.expectedRegionTimezones.question });
-  }
+  const actual = Object.fromEntries(options.regions.map((region) => [region.code, [...region.timezones].sort()]));
+  const expected = Object.fromEntries(Object.entries(expectedZones).map(([code, zones]) => [code, [...zones].sort()]));
+  expect(actual, 'Region → timezone lists must match the observed staging options').toEqual(expected);
 });
