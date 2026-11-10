@@ -11,6 +11,7 @@ const baseURL = resolveBaseUrl(suite);
 /** Traces capture typed values and full URLs, so they are only kept for suites that never handle secrets. */
 const TRACE: Record<SuiteSelection, 'off' | 'retain-on-failure'> = {
   framework: 'off',
+  'local-access': 'off',
   'A-readonly': 'retain-on-failure',
   'A-gated': 'off',
   B: 'off',
@@ -33,7 +34,7 @@ export default defineConfig({
   globalSetup: './config/global-setup.ts',
   fullyParallel: !highRisk && suite !== 'A-gated',
   workers: highRisk ? 1 : undefined,
-  retries: suite === 'A-readonly' && process.env.CI ? 1 : 0,
+  retries: suite === 'local-access' ? 0 : suite === 'A-readonly' && process.env.CI ? 1 : 0,
   forbidOnly: !!process.env.CI,
   timeout: suite === 'B' ? 10 * 60_000 : 60_000,
   expect: { timeout: 10_000 },

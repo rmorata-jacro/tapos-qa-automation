@@ -36,7 +36,7 @@ test.describe('execution gate', () => {
 
   test('nightly runs cannot select gated suites', () => {
     expect(selectedSuite({ QA_RUN_CONTEXT: 'nightly', QA_SUITE: 'A-readonly' })).toBe('A-readonly');
-    for (const suite of ['A-gated', 'B', 'C']) {
+    for (const suite of ['local-access', 'A-gated', 'B', 'C']) {
       expect(() => selectedSuite({ QA_RUN_CONTEXT: 'nightly', QA_SUITE: suite }), suite).toThrow(/not permitted in nightly/);
     }
     expect(selectedSuite({})).toBe('framework');

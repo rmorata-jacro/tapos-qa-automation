@@ -1,14 +1,15 @@
 import type { Suite } from '../products/cloud-signup/int-3437-test-catalog';
 import { assertStagingUrl } from '../shared/safety/environment-guard';
 
-export type SuiteSelection = 'framework' | Suite;
+export type SuiteSelection = 'framework' | 'local-access' | Suite;
 
-export const SUITE_SELECTIONS: SuiteSelection[] = ['framework', 'A-readonly', 'A-gated', 'B', 'C'];
+export const SUITE_SELECTIONS: SuiteSelection[] = ['framework', 'local-access', 'A-readonly', 'A-gated', 'B', 'C'];
 
 export const NIGHTLY_SUITES: SuiteSelection[] = ['framework', 'A-readonly'];
 
 export const SUITE_FILES: Record<SuiteSelection, { testDir: string; testMatch: string }> = {
   framework: { testDir: 'tests/framework', testMatch: '**/*.spec.ts' },
+  'local-access': { testDir: 'products/cloud-signup/tests', testMatch: 'local-staging-access.spec.ts' },
   'A-readonly': { testDir: 'products/cloud-signup/tests', testMatch: 'suite-a-readonly.spec.ts' },
   'A-gated': { testDir: 'products/cloud-signup/tests', testMatch: 'suite-a-gated.spec.ts' },
   B: { testDir: 'workflows/cloud-self-service-signup/tests', testMatch: 'suite-b-provisioning.spec.ts' },

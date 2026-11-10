@@ -5,6 +5,7 @@ Playwright + TypeScript automation for the INT-3437 manual QA plan, split by rea
 | Suite | Location | Safety level(s) | Nightly | Gate |
 |---|---|---|---|---|
 | framework | `tests/framework/` | framework | yes | none |
+| local-access | `products/cloud-signup/tests/local-staging-access.spec.ts` | readonly | **no** | one GET of `/signup/` in a fresh context; no other INT-3437 scenarios |
 | A-readonly | `products/cloud-signup/tests/suite-a-readonly.spec.ts` | readonly | yes | network guard aborts any mutating request to the TEST host |
 | A-gated | `products/cloud-signup/tests/suite-a-gated.spec.ts` | writes-signup, rate-limit, auth-session | **no** | `QA_ALLOW_SIGNUP_WRITES`, `QA_ALLOW_RATE_LIMIT`, `QA_ALLOW_AUTH_SESSION`; only contract-confirmed endpoints may be mutated |
 | B | `workflows/cloud-self-service-signup/tests/suite-b-provisioning.spec.ts` | provisioning | **no** | hard gate: recorded single-use approval, exactly one database, six prechecks, refused in CI |
@@ -57,6 +58,7 @@ npm ci && npx playwright install chromium
 cp .env.example .env            # fill with approved TEST values only
 
 npm test                        # framework self-tests (no staging traffic)
+npm run test:local-staging-access   # one local GET /signup/; retries 0; run this on your own computer
 npm run plan:a-readonly         # print run plan + exact tests, run nothing
 npm run plan:a-gated
 npm run plan:b

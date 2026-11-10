@@ -11,6 +11,7 @@
     "plan:a-gated": "tsx config/run-plan.ts A-gated && cross-env QA_SUITE=A-gated playwright test --list",
     "plan:b": "tsx config/run-plan.ts B && cross-env QA_SUITE=B playwright test --list",
     "plan:c": "tsx config/run-plan.ts C && cross-env QA_SUITE=C playwright test --list",
+    "test:local-staging-access": "cross-env QA_SUITE=local-access playwright test --retries=0",
     "test:a-readonly": "cross-env QA_SUITE=A-readonly playwright test",
     "test:nightly": "cross-env QA_RUN_CONTEXT=nightly QA_SUITE=A-readonly playwright test",
     "test:a-gated": "cross-env QA_SUITE=A-gated playwright test",
